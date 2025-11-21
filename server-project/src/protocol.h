@@ -11,9 +11,9 @@
 #include <stdbool.h>
 
 // Parametri condivisi
-#define SERVER_PORT 56700   // Porta di default del server
-#define BUFFER_SIZE 512     // Dimensione buffer per messaggi
-#define QUEUE_SIZE 5        // Dimensione della coda di connessioni pendenti
+#define SERVER_PORT 56700
+#define BUFFER_SIZE 512
+#define QUEUE_SIZE 5
 #define NO_ERROR 0
 
 // Codici di stato della risposta
