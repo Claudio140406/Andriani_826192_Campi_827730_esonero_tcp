@@ -108,13 +108,17 @@ int main() {
 
     // Ciclo infinito per gestire i client
     while (1) {
-        struct sockaddr_in cad;
-        int client_len = sizeof(cad);
-        int client_socket = accept(my_socket, (struct sockaddr*)&cad, &client_len);
-        if (client_socket < 0) {
-            printf("accept() fallita.\n");
-            continue;
-        }
+				struct sockaddr_in cad;
+				#if defined WIN32
+					int client_len = sizeof(struct sockaddr_in);
+				#else
+					socklen_t client_len = sizeof(struct sockaddr_in);
+				#endif
+				int client_socket = accept(my_socket, (struct sockaddr*)&cad, &client_len);
+				if (client_socket < 0) {
+					printf("accept() fallita.\n");
+					continue;
+				}
 
         printf("Connessione accettata da %s\n", inet_ntoa(cad.sin_addr));
 
