@@ -1,14 +1,17 @@
 /*
- * server.c
+ * main.c
  *
- * TCP Server - Servizio Meteo
- * Portabile su Windows, Linux e macOS
+ * TCP Server - Template for Computer Networks assignment
+ *
+ * This file contains the boilerplate code for a TCP server
+ * portable across Windows, Linux and macOS.
  */
 
 #if defined WIN32
 #include <winsock.h>
 #else
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -16,14 +19,20 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #define closesocket close
-#define strcasecmp _stricmp
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
-#include <ctype.h>
 #include "protocol.h"
+
+#define NO_ERROR 0
+
+void clearwinsock() {
+#if defined WIN32
+    WSACleanup();
+#endif
+}
+
 
 // Lista città supportate
 const char *citta[] = {
@@ -56,113 +65,122 @@ float get_pressure(void) {
     return ((float)rand() / RAND_MAX) * (1050.0 - 950.0) + 950.0;
 }
 
-void clearwinsock() {
-#if defined WIN32
-    WSACleanup();
-#endif
-}
 
-int main() {
+int main(int argc, char *argv[]) {
+
+    // TODO: Implement server logic
+
 #if defined WIN32
+    // Initialize Winsock
     WSADATA wsa_data;
-    int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
+    int result = WSAStartup(MAKEWORD(2,2), &wsa_data);
     if (result != NO_ERROR) {
-        printf("Errore a WSAStartup()\n");
-        exit(EXIT_FAILURE);
+        printf("Error at WSAStartup()\n");
+        return 0;
     }
 #endif
 
-    srand(time(NULL));
+    // Porta di default
+    int port = SERVER_PORT;
+    // Parsing argomenti da riga di comando
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-p") == 0 && i+1 < argc) {
+            port = atoi(argv[++i]);
+        }
+    }
 
-    // Creazione socket
-    int my_socket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    int my_socket;
+
+    // TODO: Create socket
+    my_socket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (my_socket < 0) {
-        printf("Creazione socket fallita.\n");
+        perror("Creazione socket fallita");
         clearwinsock();
         exit(EXIT_FAILURE);
     }
 
-    // Configurazione indirizzo
-    struct sockaddr_in sad;
-    sad.sin_family = AF_INET;
-    sad.sin_addr.s_addr = inet_addr("127.0.0.1");
-    sad.sin_port = htons(SERVER_PORT);
+    // TODO: Configure server address
+    struct sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+    server_addr.sin_addr.s_addr = INADDR_ANY;
 
-    // Bind
-    if (bind(my_socket, (struct sockaddr*)&sad, sizeof(sad)) < 0) {
-        printf("bind() fallita.\n");
+    // TODO: Bind socket
+    if (bind(my_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        perror("bind() fallita");
         closesocket(my_socket);
         clearwinsock();
         exit(EXIT_FAILURE);
     }
 
-    // Listen
+    // TODO: Set socket to listen
     if (listen(my_socket, QUEUE_SIZE) < 0) {
-        printf("listen() fallita.\n");
+        perror("listen() fallita");
         closesocket(my_socket);
         clearwinsock();
         exit(EXIT_FAILURE);
     }
 
-    printf("Server in ascolto sulla porta %d...\n", SERVER_PORT);
+    printf("Server in ascolto sulla porta %d...\n", port);
 
-    // Ciclo infinito per gestire i client
+    // TODO: Implement connection acceptance loop
     while (1) {
-				struct sockaddr_in cad;
-				#if defined WIN32
-					int client_len = sizeof(struct sockaddr_in);
-				#else
-					socklen_t client_len = sizeof(struct sockaddr_in);
-				#endif
-				int client_socket = accept(my_socket, (struct sockaddr*)&cad, &client_len);
-				if (client_socket < 0) {
-					printf("accept() fallita.\n");
-					continue;
-				}
+        struct sockaddr_in client_addr;
+#if defined WIN32
+        int client_len = sizeof(client_addr);
+#else
+        socklen_t client_len = sizeof(client_addr);
+#endif
+        int client_socket = accept(my_socket, (struct sockaddr*)&client_addr, &client_len);
+        if (client_socket < 0) {
+            perror("accept() fallita");
+            continue;
+        }
 
-        printf("Connessione accettata da %s\n", inet_ntoa(cad.sin_addr));
+        printf("Connessione accettata da %s\n", inet_ntoa(client_addr.sin_addr));
 
-        weather_request_t rich;
-        weather_response_t ris;
+        weather_request_t req;
+        weather_response_t res;
 
         // Ricezione richiesta
-        if (recv(client_socket, (char*)&rich, sizeof(rich), 0) <= 0) {
+        if (recv(client_socket, (char*)&req, sizeof(req), 0) <= 0) {
             perror("Errore recv");
             closesocket(client_socket);
             continue;
         }
 
-        printf("Richiesta '%c %s' dal client ip %s\n", rich.type, rich.city, inet_ntoa(cad.sin_addr));
+        printf("Richiesta '%c %s' dal client ip %s\n", req.type, req.city, inet_ntoa(client_addr.sin_addr));
 
         // Validazione richiesta
-        if (rich.type != 't' && rich.type != 'h' && rich.type != 'w' && rich.type != 'p') {
-            ris.status = STATUS_INVALID_REQUEST;
-            ris.type = '\0';
-            ris.value = 0.0;
-        } else if (!citta_valida(rich.city)) {
-            ris.status = STATUS_CITY_NOT_AVAILABLE;
-            ris.type = '\0';
-            ris.value = 0.0;
+        if (req.type != 't' && req.type != 'h' && req.type != 'w' && req.type != 'p') {
+            res.status = STATUS_INVALID_REQUEST;
+            res.type = '\0';
+            res.value = 0.0;
+        } else if (!citta_valida(req.city)) {
+            res.status = STATUS_CITY_NOT_AVAILABLE;
+            res.type = '\0';
+            res.value = 0.0;
         } else {
-            ris.status = STATUS_SUCCESS;
-            ris.type = rich.type;
-            switch (rich.type) {
-                case 't': ris.value = get_temperature(); break;
-                case 'h': ris.value = get_humidity(); break;
-                case 'w': ris.value = get_wind(); break;
-                case 'p': ris.value = get_pressure(); break;
+            res.status = STATUS_SUCCESS;
+            res.type = req.type;
+            switch (req.type) {
+                case 't': res.value = get_temperature(); break;
+                case 'h': res.value = get_humidity(); break;
+                case 'w': res.value = get_wind(); break;
+                case 'p': res.value = get_pressure(); break;
             }
         }
 
         // Invio risposta
-        send(client_socket, (char*)&ris, sizeof(ris), 0);
+        send(client_socket, (char*)&res, sizeof(res), 0);
 
         // Chiusura connessione client
         closesocket(client_socket);
     }
 
-    // Chiusura socket server
+    printf("Server terminated.\n");
+
     closesocket(my_socket);
     clearwinsock();
     return 0;
-}
+} // main end
